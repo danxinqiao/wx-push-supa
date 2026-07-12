@@ -1,12 +1,15 @@
 # 工作流名称，显示在 GitHub Actions 页面
 name: Deploy Edge Function
 
-# 触发条件：推送到 main 分支，且 supabase/functions 目录下有文件变动
+# 触发条件：
+# 1. 推送到 main 分支，且 supabase/functions 目录下有文件变动
+# 2. 支持在 GitHub Actions 页面手动触发
 on:
   push:
     branches: [main]
     paths:
       - 'supabase/functions/**'
+  workflow_dispatch:
 
 jobs:
   deploy:
