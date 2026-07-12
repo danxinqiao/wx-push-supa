@@ -1,11 +1,5 @@
 [project]
-id = "your-project-id"
+id = "hpbnvpiosrzhgyxbrwpt"
 
-[functions.wx-verify]
-verify_jwt = false
-
-[functions.domain-check]
-verify_jwt = false
-
-[functions.debug]
+[functions.wx-push]
 verify_jwt = false

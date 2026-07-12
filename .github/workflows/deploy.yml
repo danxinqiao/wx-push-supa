@@ -1,0 +1,30 @@
+# 工作流名称，显示在 GitHub Actions 页面
+name: Deploy Edge Function
+
+# 触发条件：推送到 main 分支，且 supabase/functions 目录下有文件变动
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+
+jobs:
+  deploy:
+    # 运行环境
+    runs-on: ubuntu-latest
+    steps:
+      # 拉取仓库代码
+      - uses: actions/checkout@v4
+
+      # 安装 Supabase CLI
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # 部署 wx-push 函数到 Supabase
+      # --project-ref: 指定目标项目，值来自 GitHub Secrets 中的 SUPABASE_PROJECT_ID
+      # SUPABASE_ACCESS_TOKEN: 鉴权令牌，值来自 GitHub Secrets 中的 SUPABASE_ACCESS_TOKEN
+      # 需要在 GitHub 仓库 Settings → Secrets and variables → Actions 中配置这两个 Secret
+      - run: supabase functions deploy wx-push --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

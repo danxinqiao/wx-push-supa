@@ -1,8 +1,17 @@
 import type { WechatTemplateData, WechatVerificationParams } from './types.ts';
 
-/**
- * 微信服务器配置验证 - 验证签名
- */
+interface WechatTokenResponse {
+  access_token?: string;
+  errcode?: number;
+  errmsg?: string;
+}
+
+interface WechatSendResponse {
+  errcode: number;
+  errmsg: string;
+  msgid?: number;
+}
+
 export async function verifyWechatSignature(
   token: string,
   signature: string,
@@ -17,59 +26,50 @@ export async function verifyWechatSignature(
   const hashBuffer = await crypto.subtle.digest('SHA-1', data);
 
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 
   return hashHex === signature;
 }
 
-/**
- * 处理微信服务器配置验证请求
- */
 export async function handleWechatVerification(
   params: WechatVerificationParams
 ): Promise<string | null> {
   const { signature, timestamp, nonce, echostr } = params;
 
-  const wechatToken = Deno.env.get('WECHAT_TOKEN')!;
-  const isValid = await verifyWechatSignature(
-    wechatToken,
-    signature,
-    timestamp,
-    nonce
-  );
+  const wechatToken = Deno.env.get('WECHAT_TOKEN');
+  if (!wechatToken) {
+    throw new Error('环境变量 WECHAT_TOKEN 未配置');
+  }
 
+  const isValid = await verifyWechatSignature(wechatToken, signature, timestamp, nonce);
   return isValid ? echostr : null;
 }
 
-/**
- * 获取微信access_token
- */
 export async function getAccessToken(): Promise<string> {
-  const appId = Deno.env.get('WECHAT_APP_ID')!;
-  const appSecret = Deno.env.get('WECHAT_APP_SECRET')!;
+  const appId = Deno.env.get('WECHAT_APP_ID');
+  const appSecret = Deno.env.get('WECHAT_APP_SECRET');
+  if (!appId || !appSecret) {
+    throw new Error('环境变量 WECHAT_APP_ID 或 WECHAT_APP_SECRET 未配置');
+  }
 
   const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appId}&secret=${appSecret}`;
-
   const response = await fetch(url);
-  const data = await response.json() as { access_token?: string; errcode?: number; errmsg?: string };
+  const data: WechatTokenResponse = await response.json();
 
   if (!data.access_token) {
-    throw new Error(`获取access_token失败: ${data.errmsg || '未知错误'}`);
+    throw new Error(`获取access_token失败: ${data.errmsg ?? '未知错误'}`);
   }
 
   return data.access_token;
 }
 
-/**
- * 发送模板消息
- */
 export async function sendTemplateMessage(
   accessToken: string,
   touser: string,
   templateId: string,
   data: WechatTemplateData,
   url?: string
-): Promise<{ errcode: number; errmsg: string; msgid?: number }> {
+): Promise<WechatSendResponse> {
   const apiUrl = `https://api.weixin.qq.com/cgi-bin/message/template/send?access_token=${accessToken}`;
 
   const message = {
@@ -81,13 +81,11 @@ export async function sendTemplateMessage(
 
   const response = await fetch(apiUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json;charset=utf-8',
-    },
+    headers: { 'Content-Type': 'application/json;charset=utf-8' },
     body: JSON.stringify(message),
   });
 
-  const result = await response.json() as { errcode: number; errmsg: string; msgid?: number };
+  const result: WechatSendResponse = await response.json();
 
   if (result.errcode !== 0) {
     throw new Error(`发送模板消息失败: ${result.errmsg}`);
@@ -96,10 +94,11 @@ export async function sendTemplateMessage(
   return result;
 }
 
-/**
- * 验证Authorization token
- */
 export function validateToken(request: Request): boolean {
   const authHeader = request.headers.get('Authorization');
-  return authHeader === Deno.env.get('API_TOKEN');
+  const apiToken = Deno.env.get('WECHAT_API_TOKEN');
+  if (!apiToken) {
+    return false;
+  }
+  return authHeader === apiToken;
 }
