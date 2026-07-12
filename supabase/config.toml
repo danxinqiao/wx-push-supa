@@ -1,0 +1,11 @@
+[project]
+id = "your-project-id"
+
+[functions.wx-verify]
+verify_jwt = false
+
+[functions.domain-check]
+verify_jwt = false
+
+[functions.debug]
+verify_jwt = false
