@@ -174,16 +174,14 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-      const items: BilibiliPushItem[] = await req.json();
+      const body = await req.json() as { openid?: string; data?: BilibiliPushItem[] };
 
-      if (!Array.isArray(items) || items.length === 0) {
-        return jsonResponse({ error: '请求体必须为非空数组' }, 400);
+      if (!body.openid || !body.data || !Array.isArray(body.data) || body.data.length === 0) {
+        return jsonResponse({ error: '请求体必须包含 openid 和 data（非空数组）' }, 400);
       }
 
-      const openid = Deno.env.get('WECHAT_OPENID');
-      if (!openid) {
-        return jsonResponse({ error: '环境变量 WECHAT_OPENID 未配置' }, 500);
-      }
+      const items = body.data;
+      const openid = body.openid;
 
       const bilibiliTemplateId = Deno.env.get('WECHAT_TEMPLATE_BILIBILI_ID');
       if (!bilibiliTemplateId) {
