@@ -1,6 +1,7 @@
 import { handleWechatVerification, validateToken, getAccessToken, sendTemplateMessage } from '../_shared/wechat.ts';
-import { convertToWechatTemplate, formatDomainCheckText } from '../_shared/templates.ts';
-import type { WechatVerificationParams, DomainCheckRequest } from '../_shared/types.ts';
+import { convertToWechatTemplate, formatDomainCheckText, convertToBilibiliTemplate } from '../_shared/templates.ts';
+import { redisGet, redisSet } from '../_shared/upstash.ts';
+import type { WechatVerificationParams, DomainCheckRequest, BilibiliPushItem } from '../_shared/types.ts';
 
 interface WechatTokenResponse {
   access_token?: string;
@@ -158,6 +159,78 @@ Deno.serve(async (req: Request) => {
     } catch (error) {
       return jsonResponse({
         error: error instanceof Error ? error.message : 'Unknown',
+      }, 500);
+    }
+  }
+
+  // POST /bilibili-push - B站动态推送
+  if (path === '/bilibili-push') {
+    if (req.method !== 'POST') {
+      return jsonResponse({ error: 'Method not allowed' }, 405);
+    }
+
+    if (!validateToken(req)) {
+      return jsonResponse({ error: 'Unauthorized' }, 401);
+    }
+
+    try {
+      const items: BilibiliPushItem[] = await req.json();
+
+      if (!Array.isArray(items) || items.length === 0) {
+        return jsonResponse({ error: '请求体必须为非空数组' }, 400);
+      }
+
+      const openid = Deno.env.get('WECHAT_OPENID');
+      if (!openid) {
+        return jsonResponse({ error: '环境变量 WECHAT_OPENID 未配置' }, 500);
+      }
+
+      const bilibiliTemplateId = Deno.env.get('WECHAT_TEMPLATE_BILIBILI_ID');
+      if (!bilibiliTemplateId) {
+        return jsonResponse({ error: '环境变量 WECHAT_TEMPLATE_BILIBILI_ID 未配置' }, 500);
+      }
+
+      const accessToken = await getAccessToken();
+      const results: Array<{ id_str: string; skipped: boolean; success?: boolean; error?: string }> = [];
+
+      for (const item of items) {
+        // 检查 Upstash Redis 中 bilibili_push 的值
+        const storedIdStr = await redisGet('bilibili_push');
+
+        // 如果存储的值 >= 当前 id_str，跳过该消息（字符串比较即可）
+        if (storedIdStr !== null && storedIdStr >= item.id_str) {
+          results.push({ id_str: item.id_str, skipped: true });
+          console.log(`跳过已推送消息: ${item.id_str}`);
+          continue;
+        }
+
+        // 推送微信模板消息
+        try {
+          const templateData = convertToBilibiliTemplate(item);
+          const sendResult = await sendTemplateMessage(
+            accessToken,
+            openid,
+            bilibiliTemplateId,
+            templateData
+          );
+
+          // 推送成功，更新 Upstash Redis
+          await redisSet('bilibili_push', item.id_str);
+          console.log(`B站推送成功: ${item.id_str}, msgid: ${sendResult.msgid}`);
+
+          results.push({ id_str: item.id_str, skipped: false, success: true });
+        } catch (pushError) {
+          const errorMsg = pushError instanceof Error ? pushError.message : '推送失败';
+          console.error(`B站推送失败: ${item.id_str} - ${errorMsg}`);
+          results.push({ id_str: item.id_str, skipped: false, success: false, error: errorMsg });
+        }
+      }
+
+      return jsonResponse({ results });
+    } catch (error) {
+      console.error('B站动态推送处理失败:', error);
+      return jsonResponse({
+        error: error instanceof Error ? error.message : 'Unknown error',
       }, 500);
     }
   }

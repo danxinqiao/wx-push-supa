@@ -51,3 +51,12 @@ export interface WechatVerificationParams {
   nonce: string;
   echostr: string;
 }
+
+/**
+ * B站推送数据项
+ */
+export interface BilibiliPushItem {
+  id_str: string;
+  name: string;
+  text: string;
+}
