@@ -199,7 +199,7 @@ Deno.serve(async (req: Request) => {
         // 如果存储的值 >= 当前 id_str，跳过该消息（字符串比较即可）
         if (storedIdStr !== null && storedIdStr >= item.id_str) {
           results.push({ id_str: item.id_str, skipped: true });
-          console.log(`跳过已推送消息: ${item.id_str}`);
+          console.log(`跳过已推送消息: ${item.id_str}, redisKey: ${storedIdStr}`);
           continue;
         }
 
