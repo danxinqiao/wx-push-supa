@@ -191,6 +191,7 @@ Deno.serve(async (req: Request) => {
       const accessToken = await getAccessToken();
       const results: Array<{ id_str: string; skipped: boolean; success?: boolean; error?: string }> = [];
 
+      items.sort((a, b) => Number(a.id_str) - Number(b.id_str)); // 从小到大
       for (const item of items) {
         // 检查 Upstash Redis 中 bilibili_push 的值
         const storedIdStr = await redisGet('bilibili_push');
