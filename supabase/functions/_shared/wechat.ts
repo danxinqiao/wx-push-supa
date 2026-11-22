@@ -1,4 +1,5 @@
 import type { WechatTemplateData, WechatVerificationParams } from './types.ts';
+import { SIGNATURE_HEADER, TIMESTAMP_HEADER, verifySignature } from './sign.ts';
 
 interface WechatTokenResponse {
   access_token?: string;
@@ -94,6 +95,10 @@ export async function sendTemplateMessage(
   return result;
 }
 
+/**
+ * 旧鉴权：Authorization 头直接等于 WECHAT_API_TOKEN。
+ * 保留给 auto-check-domain / auto-get-bz-info 等尚未迁移的调用方。
+ */
 export function validateToken(request: Request): boolean {
   const authHeader = request.headers.get('Authorization');
   const apiToken = Deno.env.get('WECHAT_API_TOKEN');
@@ -101,4 +106,19 @@ export function validateToken(request: Request): boolean {
     return false;
   }
   return authHeader === apiToken;
+}
+
+/**
+ * 新鉴权：在本函数内部直接校验签名，不再请求 wx-reply。
+ * 算法与 wx-reply 的 /sign 一致：md5(毫秒时间戳 + CRON_SECRET)，时间窗 ±60 秒。
+ */
+export function verifyRequestSignature(request: Request): boolean {
+  const timestamp = request.headers.get(TIMESTAMP_HEADER);
+  const signature = request.headers.get(SIGNATURE_HEADER);
+  if (!timestamp || !signature) return false;
+
+  const secret = Deno.env.get('CRON_SECRET');
+  if (!secret) return false;
+
+  return verifySignature(timestamp, signature, secret).valid;
 }

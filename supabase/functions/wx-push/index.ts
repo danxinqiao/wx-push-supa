@@ -1,4 +1,4 @@
-import { handleWechatVerification, validateToken, getAccessToken, sendTemplateMessage } from '../_shared/wechat.ts';
+import { handleWechatVerification, validateToken, verifyRequestSignature, getAccessToken, sendTemplateMessage } from '../_shared/wechat.ts';
 import { convertToWechatTemplate, formatDomainCheckText, convertToBilibiliTemplate } from '../_shared/templates.ts';
 import { redisGet, redisSet } from '../_shared/upstash.ts';
 import type { WechatVerificationParams, DomainCheckRequest, BilibiliPushItem } from '../_shared/types.ts';
@@ -78,7 +78,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Method not allowed' }, 405);
     }
 
-    if (!validateToken(req)) {
+    if (!verifyRequestSignature(req) && !validateToken(req)) {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
@@ -114,6 +114,71 @@ Deno.serve(async (req: Request) => {
         error: error instanceof Error ? error.message : 'Unknown error',
       }, 500);
     }
+  }
+
+  // POST /stock-remind - 大A判断每日提醒
+  if (path === '/stock-remind') {
+    if (req.method !== 'POST') {
+      return jsonResponse({ error: 'Method not allowed' }, 405);
+    }
+
+    if (!verifyRequestSignature(req) && !validateToken(req)) {
+      return jsonResponse({ error: 'Unauthorized' }, 401);
+    }
+
+    try {
+      const body = await req.json() as { openid?: string; date?: string; operate?: string; tip?: string };
+
+      if (!body.openid || !body.date) {
+        return jsonResponse({ error: 'openid and date are required' }, 400);
+      }
+
+      const templateId = Deno.env.get('WECHAT_TEMPLATE_STOCK_ID');
+      if (!templateId) {
+        return jsonResponse({ error: '环境变量 WECHAT_TEMPLATE_STOCK_ID 未配置' }, 500);
+      }
+
+      const accessToken = await getAccessToken();
+      const result = await sendTemplateMessage(accessToken, body.openid, templateId, {
+        date:    { value: body.date },
+        operate: { value: body.operate ?? '' },
+        tip:     { value: body.tip ?? '' },
+      });
+
+      return jsonResponse({ ok: true, msgid: result.msgid });
+    } catch (error) {
+      console.error('大A提醒推送失败:', error);
+      return jsonResponse({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }, 500);
+    }
+  }
+
+  // POST /task-created - 创建任务
+  if (path === '/task-created') {
+    if (req.method !== 'POST') {
+      return jsonResponse({ error: 'Method not allowed' }, 405);
+    }
+
+    if (!verifyRequestSignature(req) && !validateToken(req)) {
+      return jsonResponse({ error: 'Unauthorized' }, 401);
+    }
+
+    const body = await req.json() as { openid: string; title: string; content: string };
+    if (!body.openid || !body.title || !body.content) {
+      return jsonResponse({ error: 'openid, title and content are required' }, 400);
+    }
+
+    const templateId = Deno.env.get('WECHAT_TEMPLATE_TASK_ID');
+    if (!templateId) return jsonResponse({ error: 'WECHAT_TEMPLATE_TASK_ID 未配置' }, 500);
+
+    const accessToken = await getAccessToken();
+    const result = await sendTemplateMessage(accessToken, body.openid, templateId, {
+      title:   { value: body.title },
+      content: { value: body.content },
+    });
+
+    return jsonResponse({ ok: true, msgid: result.msgid });
   }
 
   // GET /debug - 调试接口
@@ -169,7 +234,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Method not allowed' }, 405);
     }
 
-    if (!validateToken(req)) {
+    if (!verifyRequestSignature(req) && !validateToken(req)) {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
@@ -191,6 +256,7 @@ Deno.serve(async (req: Request) => {
       const accessToken = await getAccessToken();
       const results: Array<{ id_str: string; skipped: boolean; success?: boolean; error?: string }> = [];
 
+      items.sort((a, b) => Number(a.id_str) - Number(b.id_str)); // 从小到大
       for (const item of items) {
         // 检查 Upstash Redis 中 bilibili_push 的值
         const storedIdStr = await redisGet('bilibili_push');
@@ -198,7 +264,7 @@ Deno.serve(async (req: Request) => {
         // 如果存储的值 >= 当前 id_str，跳过该消息（字符串比较即可）
         if (storedIdStr !== null && storedIdStr >= item.id_str) {
           results.push({ id_str: item.id_str, skipped: true });
-          console.log(`跳过已推送消息: ${item.id_str}`);
+          console.log(`跳过已推送消息: ${item.id_str}, redisKey: ${storedIdStr}`);
           continue;
         }
 
