@@ -95,18 +95,7 @@ export async function sendTemplateMessage(
   return result;
 }
 
-/**
- * 旧鉴权：Authorization 头直接等于 WECHAT_API_TOKEN。
- * 保留给 auto-check-domain / auto-get-bz-info 等尚未迁移的调用方。
- */
-export function validateToken(request: Request): boolean {
-  const authHeader = request.headers.get('Authorization');
-  const apiToken = Deno.env.get('WECHAT_API_TOKEN');
-  if (!apiToken) {
-    return false;
-  }
-  return authHeader === apiToken;
-}
+
 
 /**
  * 新鉴权：在本函数内部直接校验签名，不再请求 wx-reply。

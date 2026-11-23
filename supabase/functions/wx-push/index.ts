@@ -1,4 +1,4 @@
-import { handleWechatVerification, validateToken, verifyRequestSignature, getAccessToken, sendTemplateMessage } from '../_shared/wechat.ts';
+import { handleWechatVerification, verifyRequestSignature, getAccessToken, sendTemplateMessage } from '../_shared/wechat.ts';
 import { convertToWechatTemplate, formatDomainCheckText, convertToBilibiliTemplate } from '../_shared/templates.ts';
 import { redisGet, redisSet } from '../_shared/upstash.ts';
 import type { WechatVerificationParams, DomainCheckRequest, BilibiliPushItem } from '../_shared/types.ts';
@@ -78,7 +78,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Method not allowed' }, 405);
     }
 
-    if (!verifyRequestSignature(req) && !validateToken(req)) {
+    if (!verifyRequestSignature(req)) {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
@@ -122,7 +122,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Method not allowed' }, 405);
     }
 
-    if (!verifyRequestSignature(req) && !validateToken(req)) {
+    if (!verifyRequestSignature(req)) {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
@@ -160,7 +160,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Method not allowed' }, 405);
     }
 
-    if (!verifyRequestSignature(req) && !validateToken(req)) {
+    if (!verifyRequestSignature(req)) {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
@@ -234,7 +234,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Method not allowed' }, 405);
     }
 
-    if (!verifyRequestSignature(req) && !validateToken(req)) {
+    if (!verifyRequestSignature(req)) {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 

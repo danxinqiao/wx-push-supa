@@ -51,7 +51,7 @@ npx supabase secrets set --project-ref hpbnvpiosrzhgyxbrwpt WECHAT_APP_ID=你的
 npx supabase secrets set --project-ref hpbnvpiosrzhgyxbrwpt WECHAT_APP_SECRET=你的AppSecret
 npx supabase secrets set --project-ref hpbnvpiosrzhgyxbrwpt WECHAT_TEMPLATE_ID=你的模板ID
 npx supabase secrets set --project-ref hpbnvpiosrzhgyxbrwpt WECHAT_TOKEN=你的Token
-npx supabase secrets set --project-ref hpbnvpiosrzhgyxbrwpt WECHAT_API_TOKEN=你的API_TOKEN
+npx supabase secrets set --project-ref hpbnvpiosrzhgyxbrwpt CRON_SECRET=你的CRON_SECRET
 ```
 
 #### 本地开发：编辑 `supabase/.env.local`
@@ -61,7 +61,7 @@ WECHAT_APP_ID=你的AppID
 WECHAT_APP_SECRET=你的AppSecret
 WECHAT_TEMPLATE_ID=你的模板ID
 WECHAT_TOKEN=你的Token
-WECHAT_API_TOKEN=你的API_TOKEN
+CRON_SECRET=你的CRON_SECRET
 ```
 
 ### 5. 获取微信测试公众号信息
@@ -119,8 +119,11 @@ npm run deploy
 发送 POST 请求到 `/wx-push/domain-check` 端点：
 
 ```bash
+TS=$(date +%s%3N)
+SIG=$(printf '%s' "${TS}${CRON_SECRET}" | openssl dgst -md5 -r | awk '{print $1}')
 curl -X POST https://hpbnvpiosrzh.supabase.co/functions/v1/wx-push/domain-check \
-  -H "Authorization: 你的WECHAT_API_TOKEN" \
+  -H "X-Sign-Timestamp: $TS" \
+  -H "X-Signature: $SIG" \
   -H "Content-Type: application/json" \
   -d '{
     "openid": "接收用户的openid",
@@ -163,7 +166,7 @@ curl https://hpbnvpiosrzh.supabase.co/functions/v1/wx-push/debug
 1. **openid 从请求参数获取**: 在请求中提供 `openid` 字段
 2. **敏感信息使用 secrets**: 不要在代码中硬编码敏感信息
 3. **Token 一致性**: `WECHAT_TOKEN` 必须与微信后台填写的 Token 完全一致
-4. **WECHAT_API_TOKEN 验证**: 推送请求需要提供正确的 `Authorization` 头
+4. **签名验证**: 推送请求需要提供 `X-Sign-Timestamp` 和 `X-Signature`（`md5(时间戳 + CRON_SECRET)`）
 5. **模板格式**: 微信模板消息需要根据实际创建的模板格式调整数据结构
 6. **verify_jwt**: 默认关闭了 JWT 验证，如需开启请在 `supabase/config.toml` 中修改
 
